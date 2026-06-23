@@ -19,6 +19,12 @@ WORKDIR /var/www/html
 COPY deep.zip .
 RUN unzip deep.zip && rm deep.zip
 
+# ============================================================
+# AUTOMATIC FIX: Yeh line aapke config.php mein localhost ko 
+# 127.0.0.1 mein badal degi bina aapko zip open kiye.
+RUN sed -i "s/'localhost'/'127.0.0.1'/g" config.php
+# ============================================================
+
 # Set proper permissions for the web server
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html
@@ -33,7 +39,7 @@ RUN echo '#!/bin/bash\n\
 echo "Starting MariaDB..."\n\
 service mariadb start\n\
 \n\
-# Loop to wait until MySQL socket file is created (fixes the 2002 error)\n\
+# Loop to wait until MySQL socket file is created\n\
 while [ ! -S /var/run/mysqld/mysqld.sock ]; do\n\
   echo "Waiting for MySQL to start..."\n\
   sleep 1\n\
@@ -43,7 +49,6 @@ echo "MariaDB is up and running!"\n\
 # Import the database if the SQL file exists\n\
 if [ -f "database.sql" ]; then\n\
   echo "Importing database.sql..."\n\
-  # Ensure root user has no password just in case PHP expects it\n\
   mysql -e "ALTER USER '\''root'\''@'\''localhost'\'' IDENTIFIED BY '\'''\''; FLUSH PRIVILEGES;" || true\n\
   mysql < database.sql\n\
   echo "Database imported successfully!"\n\
