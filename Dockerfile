@@ -1,7 +1,7 @@
-# PHP aur Apache ka official base image
+# Base image for PHP and Apache
 FROM php:8.2-apache
 
-# Unzip, MariaDB (MySQL) server, client aur PHP extensions install karna
+# Install Unzip, MariaDB (MySQL), and PHP extensions
 RUN apt-get update && apt-get install -y \
     unzip \
     mariadb-server \
@@ -9,27 +9,56 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo pdo_mysql mysqli \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# URL rewriting enable karna
+# Enable URL rewriting for Apache
 RUN a2enmod rewrite
 
-# Working directory set karna
+# Set working directory
 WORKDIR /var/www/html
 
-# Zip file ko container mein copy karna
+# Copy the zip file and extract it
 COPY deep.zip .
-
-# Zip ko extract karna aur phir zip file ko delete karna
 RUN unzip deep.zip && rm deep.zip
 
-# Web server ke permissions set karna
+# Set proper permissions for the web server
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html
 
-# Render ke liye port 80 open karna
+# Ensure MySQL directories exist and have correct permissions
+RUN mkdir -p /var/run/mysqld \
+    && chown -R mysql:mysql /var/run/mysqld \
+    && chown -R mysql:mysql /var/lib/mysql
+
+# Create a robust startup script
+RUN echo '#!/bin/bash\n\
+echo "Starting MariaDB..."\n\
+service mariadb start\n\
+\n\
+# Loop to wait until MySQL socket file is created (fixes the 2002 error)\n\
+while [ ! -S /var/run/mysqld/mysqld.sock ]; do\n\
+  echo "Waiting for MySQL to start..."\n\
+  sleep 1\n\
+done\n\
+echo "MariaDB is up and running!"\n\
+\n\
+# Import the database if the SQL file exists\n\
+if [ -f "database.sql" ]; then\n\
+  echo "Importing database.sql..."\n\
+  # Ensure root user has no password just in case PHP expects it\n\
+  mysql -e "ALTER USER '\''root'\''@'\''localhost'\'' IDENTIFIED BY '\'''\''; FLUSH PRIVILEGES;" || true\n\
+  mysql < database.sql\n\
+  echo "Database imported successfully!"\n\
+fi\n\
+\n\
+# Start Apache in the foreground\n\
+echo "Starting Apache..."\n\
+exec apache2-foreground\n\
+' > /start.sh
+
+# Make the startup script executable
+RUN chmod +x /start.sh
+
+# Expose port 80 for Render
 EXPOSE 80
 
-# Container start hone par pehle MySQL start karna, database import karna, phir Apache start karna
-CMD /etc/init.d/mariadb start && \
-    sleep 3 && \
-    (mysql < database.sql || true) && \
-    apache2-foreground
+# Command to run the startup script when the container starts
+CMD ["/start.sh"]
