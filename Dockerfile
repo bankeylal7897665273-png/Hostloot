@@ -11,12 +11,17 @@ RUN apt-get update && apt-get install -y \
 # Clean URLs ke liye Apache mod_rewrite enable karein
 RUN a2enmod rewrite
 
+# 403 Error Fix: Apache ko directory read karne ki full permission dena
+RUN echo "<Directory /var/www/html>\n\tOptions Indexes FollowSymLinks\n\tAllowOverride All\n\tRequire all granted\n</Directory>" > /etc/apache2/conf-available/custom-dir.conf \
+    && a2enconf custom-dir
+
 # Project ki saari files ko Apache ke public folder mein copy karein
 COPY . /var/www/html/
 
-# Files ko sahi permissions dein
+# Files ko sahi permissions dein (403 error ko jad se khatam karne ke liye yahi line main hai)
 RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html
+    && find /var/www/html -type d -exec chmod 755 {} \; \
+    && find /var/www/html -type f -exec chmod 644 {} \;
 
 # Entrypoint script ko copy karein aur executable banayein
 COPY entrypoint.sh /usr/local/bin/
