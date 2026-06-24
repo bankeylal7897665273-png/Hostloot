@@ -1,25 +1,29 @@
 FROM php:8.2-apache
 
+# MariaDB server, client aur PHP extensions install karein
 RUN apt-get update && apt-get install -y \
     mariadb-server \
     mariadb-client \
-    libzip-dev \
-    libpng-dev \
-    zip unzip cron \
-    && docker-php-ext-install pdo pdo_mysql mysqli zip \
-    && a2enmod rewrite \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && docker-php-ext-install pdo pdo_mysql \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN echo '<Directory /var/www/html>\n    AllowOverride All\n    Require all granted\n</Directory>' >> /etc/apache2/apache2.conf
+# Clean URLs ke liye Apache mod_rewrite enable karein
+RUN a2enmod rewrite
 
-COPY lottery-app/ /var/www/html/
-RUN chown -R www-data:www-data /var/www/html && chmod -R 755 /var/www/html
+# Project ki saari files ko Apache ke public folder mein copy karein
+COPY . /var/www/html/
 
-# Cron for draw processing every minute
-RUN echo "* * * * * php /var/www/html/api/process_draw.php >> /var/log/draw.log 2>&1" | crontab -
+# Files ko sahi permissions dein
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html
 
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
+# Entrypoint script ko copy karein aur executable banayein
+COPY entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
+# Render ke liye Port 80 expose karein
 EXPOSE 80
-CMD ["/start.sh"]
+
+# Container start hone par entrypoint script run karein
+ENTRYPOINT ["entrypoint.sh"]
